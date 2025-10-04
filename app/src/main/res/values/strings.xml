@@ -1,3 +1,47 @@
 <resources>
-    <string name="app_name">hackyeah</string>
+    <!-- Istniejące -->
+    <string name="app_name">StressLess</string>
+    <string name="app_header">StressLess App</string>
+    <string name="Title">StressLess - \nHeart Measurement</string>
+    <string name="Data1">Frame #</string>
+    <string name="Data2">Frame Size</string>
+    <string name="Data3">AVG</string>
+    <string name="Data4">Calculating</string>
+    <string name="measurement_button_start">Start recording</string>
+    <string name="measurement_button_end">Stop recording</string>
+    <string name="measurement_button_goback">Back to home</string>
+
+    <!-- Nowe dla layoutu -->
+<!--    <string name="label_heart_measurement">Heart Measurement</string>-->
+    <string name="hint_user_notes">Write about your mood, health, or notes...</string>
+    <string name="timer_placeholder">00:00</string>
+
+    <string name="label_blood_pressure">Blood Pressure</string>
+    <string name="value_bp_placeholder">-- mmHg</string>
+
+    <string name="label_blood_sugar">Blood Sugar</string>
+    <string name="value_bs_placeholder">-- mmol/l</string>
+
+    <string name="label_bmi">BMI</string>
+    <string name="value_weight_placeholder">-- KG</string>
+
+    <string name="label_resting_hr">Resting Heart Rate</string>
+    <string name="value_hr_placeholder">-- bpm</string>
+    <string name="value_hrv_placeholder">HRV: -- ms</string>
+
+    <string name="label_recent_measurements">Recent measurements</string>
+    <string name="label_live_signal">Live Signal</string>
+
+    <string name="results_title">Last Measurement</string>
+    <string name="action_generate_report">Generate Report</string>
+    <string name="nav_home">Home</string>
+    <string name="nav_last_report">Results</string>
+    <string name="nav_history">History</string>
+    <string name="nav_settings">Settings</string>
+    <string name="msg_no_last_session">No saved measurements yet</string>
+    <string name="msg_report_collected">Data collected. Generating report…</string>
+    <string name="msg_refreshed">Refreshed</string>
+    <string name="todo_history">History screen – TODO</string>
+    <string name="todo_settings">Settings screen – TODO</string>
+
 </resources>

@@ -1,0 +1,245 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#F5F5F5">
+
+    <!-- Header -->
+    <LinearLayout
+        android:id="@+id/headerBar"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:minHeight="56dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:background="@android:color/white"
+        android:elevation="4dp"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <TextView
+            android:id="@+id/appTitle"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/app_header"
+            android:textSize="20sp"
+            android:textStyle="bold"
+            android:textColor="#222222"/>
+
+        <Button
+            android:id="@+id/buttonToggle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/measurement_button_goback"
+            android:onClick="onHeaderGoToMain"
+            android:backgroundTint="#E91E63"
+            android:textColor="@android:color/white" />
+    </LinearLayout>
+
+    <!-- Content -->
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:id="@+id/contentArea"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:padding="16dp"
+        app:layout_constraintTop_toBottomOf="@id/headerBar"
+        app:layout_constraintBottom_toTopOf="@+id/bottomNav"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <!-- Dashboard (HR + RMSSD) -->
+        <LinearLayout
+            android:id="@+id/dashboardCard"
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:orientation="vertical"
+            android:padding="8dp"
+            android:background="@android:color/white"
+            android:elevation="2dp"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintHeight_percent="0.25"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent">
+
+            <TextView
+                android:id="@+id/resultTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/results_title"
+                android:textStyle="bold"
+                android:textSize="18sp"
+                android:textColor="#222222"
+                android:layout_marginBottom="8dp"/>
+
+            <TextView
+                android:id="@+id/resultHr"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/value_hr_placeholder"
+                android:textStyle="bold"
+                android:textSize="36sp"
+                android:textColor="#222222"/>
+
+            <TextView
+                android:id="@+id/resultHrv"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/value_hrv_placeholder"
+                android:textSize="18sp"
+                android:layout_marginTop="6dp"/>
+        </LinearLayout>
+
+        <!-- Detailed metrics -->
+        <LinearLayout
+            android:id="@+id/metricsCard"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@android:color/white"
+            android:padding="16dp"
+            android:elevation="2dp"
+            app:layout_constraintTop_toBottomOf="@id/dashboardCard"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Detailed metrics"
+                android:textStyle="bold"
+                android:textSize="16sp"
+                android:layout_marginBottom="8dp"/>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/resultRMSSD"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="RMSSD: -- ms"
+                    android:textSize="16sp"/>
+
+                <TextView
+                    android:id="@+id/resultSD1"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="SD1: -- ms"
+                    android:textSize="16sp"
+                    android:layout_marginTop="4dp"/>
+
+                <TextView
+                    android:id="@+id/resultPNN20"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="pNN20: --"
+                    android:textSize="16sp"
+                    android:layout_marginTop="4dp"/>
+
+                <TextView
+                    android:id="@+id/resultSI"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Baevsky SI: --"
+                    android:textSize="16sp"
+                    android:layout_marginTop="4dp"/>
+
+                <TextView
+                    android:id="@+id/resultMeta"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Duration: -- s  •  When: --"
+                    android:textSize="14sp"
+                    android:textColor="#666666"
+                    android:layout_marginTop="8dp"/>
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- Notes -->
+        <EditText
+            android:id="@+id/userNotes"
+            android:layout_width="0dp"
+            android:layout_height="180dp"
+            android:layout_marginTop="12dp"
+            android:padding="12dp"
+            android:gravity="top|start"
+            android:hint="@string/hint_user_notes"
+            android:background="@android:color/white"
+            app:layout_constraintTop_toBottomOf="@id/metricsCard"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent" />
+
+        <!-- Generate Report -->
+        <Button
+            android:id="@+id/buttonGenerateReport"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="@string/action_generate_report"
+            android:backgroundTint="#3F51B5"
+            android:textColor="@android:color/white"
+            app:layout_constraintTop_toBottomOf="@id/userNotes"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent" />
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
+    <!-- Bottom nav -->
+    <LinearLayout
+        android:id="@+id/bottomNav"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:background="@android:color/white"
+        android:padding="8dp"
+        android:elevation="4dp"
+        android:orientation="horizontal"
+        android:weightSum="4"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <Button
+            style="@style/NavButtonStyle"
+            android:id="@+id/navHome"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/nav_home"
+            android:onClick="onNavHome"/>
+
+        <Button
+            style="@style/NavButtonStyle"
+            android:id="@+id/navLast"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/nav_last_report"
+            android:onClick="onNavLast"/>
+
+        <Button
+            style="@style/NavButtonStyle"
+            android:id="@+id/navHistory"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/nav_history"
+            android:onClick="onNavHistory"/>
+
+        <Button
+            style="@style/NavButtonStyle"
+            android:id="@+id/navSettings"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/nav_settings"
+            android:onClick="onNavSettings"/>
+    </LinearLayout>
+
+</androidx.constraintlayout.widget.ConstraintLayout>
