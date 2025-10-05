@@ -12,74 +12,106 @@ class PPGSignalProcessor {
 
     private final Listener listener;
 
-    // --- parametry filtrów (konserwatywne) ---
-    private static final int   ROBUST_WIN   = 31;     // okno do median/MAD (≈ 1 s przy 30 FPS)
-    private static final double WINSOR_K    = 3.5;    // winsoryzacja: median ± K*MAD
-    private static final int   TREND_WIN    = 60;     // okno trendu (≈ 2 s)
-    private static final int   SMOOTH_WIN   = 5;      // lekkie wygładzanie (≈ 0.17 s)
-    private static final long  REFRACT_MS   = 600;    // martwy czas między pikami (jak wcześniej)
-    private static final long  BPM_WIN_MS   = 10_000; // okno dla BPM (jak wcześniej)
-    private static final int   MIN_BPM      = 45, MAX_BPM = 180;
+    // --- parametry filtrów (adaptowane do fps) ---
+    private static final double TARGET_DETREND_SEC = 2.0;   // okno trendu ~2 s
+    private static final double TARGET_SMOOTH_SEC  = 0.15;  // wygładzanie ~150 ms
+    private static final int    DETREND_MIN = 15, DETREND_MAX = 300;
+    private static final int    SMOOTH_MIN  = 3,  SMOOTH_MAX  = 15;
 
-    // --- bufory do filtrów ---
-    private final Deque<Double> robustBuf = new ArrayDeque<>();
-    private final Deque<Double> trendBuf  = new ArrayDeque<>();
+    // --- bufory do filtracji ---
+    private final Deque<Double> detrendBuf = new ArrayDeque<>();
+    private double detrendSum = 0.0;
+    private int detrendWin = 60;
+
     private final Deque<Double> smoothBuf = new ArrayDeque<>();
+    private double smoothSum = 0.0;
+    private int smoothWin = 5;
 
-    // --- detekcja lokalnych maksimów: 3 próbki, ale na sygnale oczyszczonym ---
+    // --- do estymacji fps (dt) ---
+    private long prevTs = -1;
+    private double emaDtMs = 33.0; // start ~30 fps
+
+    // --- detekcja pików na sygnale przefiltrowanym ---
     private final Deque<Double> recent3 = new ArrayDeque<>();
+    private final Deque<Long>   recent3Ts = new ArrayDeque<>();
+    private final List<Long>    peaks = new ArrayList<>();
 
-    // --- piki i BPM ---
-    private final List<Long> peaks = new ArrayList<>();
+    // --- BPM z okna 10 s (jak było) ---
     private int  lastBpm = 0;
     private long lastBpmAtSec = -1;
-    private long lastPeakTs = 0L;
 
     PPGSignalProcessor(Listener l) { this.listener = l; }
 
     void reset() {
-        robustBuf.clear(); trendBuf.clear(); smoothBuf.clear();
-        recent3.clear(); peaks.clear();
-        lastBpm = 0; lastBpmAtSec = -1; lastPeakTs = 0L;
+        detrendBuf.clear(); detrendSum = 0.0;
+        smoothBuf.clear();  smoothSum  = 0.0;
+        recent3.clear(); recent3Ts.clear();
+        peaks.clear();
+        lastBpm = 0; lastBpmAtSec = -1;
+        prevTs = -1; emaDtMs = 33.0;
     }
 
     void onSample(double avg, long ts) {
-        // 1) Winsoryzacja względem mediany i MAD z krótkiego okna
-        double w = winsorize(avg);
+        // --- estymacja kroku czasowego ---
+        if (prevTs > 0) {
+            double dt = ts - prevTs;
+            emaDtMs = 0.9 * emaDtMs + 0.1 * dt; // łagodne śledzenie FPS
+        }
+        prevTs = ts;
 
-        // 2) Detrending: odejmij średnią z okna trendu (wycina powolne zmiany/ściemnianie)
-        push(trendBuf, w, TREND_WIN);
-        double trendMean = mean(trendBuf);
-        double detrended = w - trendMean;
+        // --- dostosowanie rozmiarów okien do FPS ---
+        double fs = 1000.0 / Math.max(1.0, emaDtMs);
+        int newDetrend = clamp((int)Math.round(TARGET_DETREND_SEC * fs), DETREND_MIN, DETREND_MAX);
+        int newSmooth  = clamp((int)Math.round(TARGET_SMOOTH_SEC  * fs), SMOOTH_MIN,  SMOOTH_MAX);
+        detrendWin = newDetrend; smoothWin = newSmooth;
 
-        // 3) Lekkie wygładzanie MA, by ograniczyć szum wysokoczęstotliwościowy
-        push(smoothBuf, detrended, SMOOTH_WIN);
-        double clean = mean(smoothBuf);
+        // --- detrending: x - mean(x, okno~2s) ---
+        detrendSum += avg;
+        detrendBuf.addLast(avg);
+        if (detrendBuf.size() > detrendWin) detrendSum -= detrendBuf.removeFirst();
+        double baseline = detrendSum / detrendBuf.size();
+        double detrended = avg - baseline;
 
-        // wykres pokazuje sygnał oczyszczony (czytelniejszy)
-        listener.onSamplePlotted((float) clean);
+        // --- wygładzanie MA (~0.15 s) ---
+        smoothSum += detrended;
+        smoothBuf.addLast(detrended);
+        if (smoothBuf.size() > smoothWin) smoothSum -= smoothBuf.removeFirst();
+        double filtered = smoothSum / smoothBuf.size();
 
-        // --- detekcja piku: lokalne maksimum/minimum na oczyszczonym sygnale ---
-        // (logika jak wcześniej: porównanie 3 próbek; polaryzacja nieistotna dzięki detrendingowi)
-        if (recent3.size() == 3) recent3.removeFirst();
-        recent3.addLast(clean);
+        // do wykresu pokazujemy sygnał po filtracji
+        listener.onSamplePlotted((float) filtered);
 
+        // --- detekcja lokalnego maksimum z interpolacją paraboliczną ---
+        recent3.addLast(filtered);
+        recent3Ts.addLast(ts);
         if (recent3.size() == 3) {
-            Double[] a = recent3.toArray(new Double[0]);
-            boolean localMax = a[1] > a[0] && a[1] > a[2];
-            boolean localMin = a[1] < a[0] && a[1] < a[2]; // gdy odwrócone sprzętowo
-            if (localMax || localMin) {
-                long now = ts;
-                if (lastPeakTs == 0 || now - lastPeakTs >= REFRACT_MS) {
-                    // RR filtrujemy tylko granicami BPM przy liczeniu BPM
-                    peaks.add(now);
-                    lastPeakTs = now;
-                    listener.onPeak(now);
+            Double[] y = recent3.toArray(new Double[0]);
+            Long[]   t = recent3Ts.toArray(new Long[0]);
+
+            if (y[1] > y[0] && y[1] > y[2]) {
+                // parabola przez punkty (-1,y0),(0,y1),(+1,y2)
+                double denom = (y[0] - 2*y[1] + y[2]);
+                double delta = 0.0;
+                if (Math.abs(denom) > 1e-9) {
+                    delta = 0.5 * (y[0] - y[2]) / denom; // przesunięcie w próbkach względem środkowej
+                    // ogranicz, by nie „uciekało”
+                    if (delta > 0.5) delta = 0.5;
+                    if (delta < -0.5) delta = -0.5;
+                }
+                long refinedTs = t[1] + Math.round(delta * emaDtMs);
+
+                // refrakcja 600 ms jak wcześniej
+                if (peaks.isEmpty() || refinedTs - peaks.get(peaks.size()-1) > 600) {
+                    peaks.add(refinedTs);
+                    listener.onPeak(refinedTs);
                 }
             }
+            // przesuwamy okno
+            recent3.removeFirst();
+            recent3Ts.removeFirst();
         }
 
-        // --- BPM z mediany interwałów w ostatnich ~10 s (jak było) ---
+        // --- BPM z okna 10 s (bez zmian koncepcyjnych) ---
         int bpm = computeBpm(ts);
         if (bpm != lastBpm) {
             lastBpm = bpm;
@@ -96,78 +128,24 @@ class PPGSignalProcessor {
 
     List<Long> getPeaksCopy() { return new ArrayList<>(peaks); }
 
-    // ================== pomocnicze ==================
-    private static void push(Deque<Double> q, double v, int max) {
-        q.addLast(v);
-        if (q.size() > max) q.removeFirst();
-    }
-
-    private static double mean(Deque<Double> q) {
-        if (q.isEmpty()) return 0.0;
-        double s = 0; for (double x : q) s += x;
-        return s / q.size();
-    }
-
-    private double winsorize(double x) {
-        // oblicz medianę i MAD na podstawie dotychczasowego okna
-        // dodaj próbkę do okna na końcu (winsoryzujemy względem okna *sprzed* tej próbki nie jest krytyczne)
-        robustBuf.addLast(x);
-        if (robustBuf.size() > ROBUST_WIN) robustBuf.removeFirst();
-
-        if (robustBuf.size() < 5) return x; // za małe okno na sensowną estymację
-
-        ArrayList<Double> vals = new ArrayList<>(robustBuf);
-        double med = median(vals);
-        double mad = mad(vals, med);
-        if (mad <= 0) return x;
-
-        double lo = med - WINSOR_K * mad;
-        double hi = med + WINSOR_K * mad;
-        if (x < lo) return lo;
-        if (x > hi) return hi;
-        return x;
-    }
-
-    private static double median(List<Double> v) {
-        Collections.sort(v);
-        int n = v.size();
-        if (n % 2 == 0) return 0.5 * (v.get(n/2 - 1) + v.get(n/2));
-        return v.get(n/2);
-    }
-
-    private static double mad(List<Double> v, double med) {
-        double[] dev = new double[v.size()];
-        for (int i = 0; i < v.size(); i++) dev[i] = Math.abs(v.get(i) - med);
-        Arrays.sort(dev);
-        int n = dev.length;
-        double medDev = (n % 2 == 0) ? 0.5 * (dev[n/2 - 1] + dev[n/2]) : dev[n/2];
-        // stała 1.4826 aby MAD ~ sigma dla Gaussa
-        return 1.4826 * medDev;
-    }
+    // --- pomocnicze ---
+    private int clamp(int v, int lo, int hi) { return Math.max(lo, Math.min(hi, v)); }
 
     private int computeBpm(long nowTs) {
-        // usuń stare piki, zostaw ~10 s
-        while (peaks.size() > 1 && nowTs - peaks.get(0) > BPM_WIN_MS) peaks.remove(0);
+        // usuń piki starsze niż 10 s
+        while (peaks.size() > 1 && nowTs - peaks.get(0) > 10_000) peaks.remove(0);
         if (peaks.size() < 2) return 0;
 
-        ArrayList<Long> ints = new ArrayList<>();
-        for (int i = 1; i < peaks.size(); i++) {
-            long rr = peaks.get(i) - peaks.get(i - 1);
-            // zachowaj tylko RR dające BPM w zakresie
-            if (rr > 0) {
-                int bpm = (int) Math.round(60000.0 / rr);
-                if (bpm >= MIN_BPM && bpm <= MAX_BPM) ints.add(rr);
-            }
-        }
-        if (ints.isEmpty()) return 0;
+        List<Long> intervals = new ArrayList<>();
+        for (int i = 1; i < peaks.size(); i++) intervals.add(peaks.get(i) - peaks.get(i - 1));
+        if (intervals.isEmpty()) return 0;
 
-        Collections.sort(ints);
-        long medRR = (ints.size() % 2 == 0)
-                ? (ints.get(ints.size()/2 - 1) + ints.get(ints.size()/2)) / 2
-                : ints.get(ints.size()/2);
+        intervals.sort(Long::compare);
+        int n = intervals.size();
+        long med = (n % 2 == 0) ? (intervals.get(n/2 - 1) + intervals.get(n/2)) / 2 : intervals.get(n/2);
 
-        int bpm = (int) Math.round(60000.0 / (double) medRR);
-        if (bpm < MIN_BPM || bpm > MAX_BPM) return 0;
+        int bpm = (int) (60000.0 / med);
+        if (bpm < 45 || bpm > 180) return 0;
         return bpm;
     }
 }

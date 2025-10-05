@@ -11,7 +11,9 @@ public class SessionSummary {
     public double rmssdMs;     // ms
     public double sd1Ms;       // ms
     public double pnn20;       // 0..1
-    public double baevskySI;   // indeks stresu
+
+    public double sdnnMs;
+
 
     public String note = "";
 
@@ -25,7 +27,6 @@ public class SessionSummary {
             o.put("rmssdMs", rmssdMs);
             o.put("sd1Ms", sd1Ms);
             o.put("pnn20", pnn20);
-            o.put("baevskySI", baevskySI);
             o.put("note", note == null ? "" : note);
         } catch (Exception ignored) {}
         return o;
@@ -41,7 +42,6 @@ public class SessionSummary {
         s.rmssdMs   = o.optDouble("rmssdMs", 0.0);
         s.sd1Ms     = o.optDouble("sd1Ms", 0.0);
         s.pnn20     = o.optDouble("pnn20", 0.0);
-        s.baevskySI = o.optDouble("baevskySI", 0.0);
         s.note      = o.optString("note", "");
         return s;
     }

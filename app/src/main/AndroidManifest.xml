@@ -3,6 +3,9 @@
 
     <!-- Jedyne potrzebne -->
     <uses-permission android:name="android.permission.CAMERA"/>
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
 
     <!-- Funkcje sprzętowe (opcjonalne, mogą zostać) -->
     <uses-feature android:name="android.hardware.camera" android:required="false" />
@@ -32,6 +35,7 @@
         <activity
             android:name=".ResultsActivity"
             android:exported="false"
+            android:windowSoftInputMode="adjustResize"
             android:theme="@style/Theme.AppCompat.DayNight.NoActionBar" />
 
     </application>

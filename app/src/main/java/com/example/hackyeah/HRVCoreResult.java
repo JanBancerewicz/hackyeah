@@ -1,9 +1,10 @@
 package com.example.hackyeah;
 
 class HRVCoreResult {
-    int meanHr;        // bpm
-    double rmssdMs;    // ms
-    double sd1Ms;      // ms (RMSSD/√2)
-    double pnn20;      // 0..1
-    double baevskySI;  // ~stress index
+    int meanHr;
+    double rmssdMs;
+    double sd1Ms;
+    double pnn20;
+    double sdnnMs;      // <-- NOWE
 }
+

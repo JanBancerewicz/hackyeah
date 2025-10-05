@@ -264,7 +264,10 @@ public class MainActivity extends Activity {
         cameraController.stopRecordingAndReturnToPreview();
 
         List<Long> peaks = new ArrayList<>(peakTimestamps);
-        List<Integer> rr = HRVCoreUtils.filterRR(HRVCoreUtils.rrFromPeaks(peaks));
+        List<Integer> rr = HRVCoreUtils.filterRR(
+                HRVCoreUtils.rrFromPeaks(peaks, startTime + 5000L)
+        );
+
         HRVCoreResult h = HRVCoreUtils.compute(rr);
 
         SessionSummary s = new SessionSummary();
@@ -276,7 +279,8 @@ public class MainActivity extends Activity {
         s.rmssdMs   = h.rmssdMs;
         s.sd1Ms     = h.sd1Ms;
         s.pnn20     = h.pnn20;
-        s.baevskySI = h.baevskySI;
+        s.sdnnMs   = h.sdnnMs;
+
 
         s.note = ""; // jeśli zbierasz notatki, uzupełnij
 

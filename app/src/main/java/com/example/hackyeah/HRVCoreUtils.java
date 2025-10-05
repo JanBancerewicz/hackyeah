@@ -2,8 +2,11 @@ package com.example.hackyeah;
 
 import java.util.*;
 
+import com.example.hackyeah.HRVCoreResult;
+
 class HRVCoreUtils {
 
+    /** RR z listy pików (ms). */
     static List<Integer> rrFromPeaks(List<Long> peaks) {
         List<Integer> rr = new ArrayList<>();
         if (peaks == null) return rr;
@@ -13,69 +16,77 @@ class HRVCoreUtils {
         return rr;
     }
 
-    static List<Integer> filterRR(List<Integer> rr) {
-        // prosta filtracja artefaktów: zakres 300..2000 ms
+    /** RR z listy pików, ignorując pary przed minTs (warm-up). */
+    static List<Integer> rrFromPeaks(List<Long> peaks, long minTs) {
+        List<Integer> rr = new ArrayList<>();
+        if (peaks == null) return rr;
+        for (int i = 1; i < peaks.size(); i++) {
+            long t0 = peaks.get(i - 1), t1 = peaks.get(i);
+            if (t0 < minTs || t1 < minTs) continue;              // pomiń pierwsze 5 s
+            rr.add((int)(t1 - t0));
+        }
+        return rr;
+    }
+
+    /** Oczyszczanie NN: zakres i odcięcie względem mediany (±120 ms) + bezpieczne fallbacki. */
+    static List<Integer> filterRR(List<Integer> rrIn) {
+        if (rrIn == null || rrIn.size() < 2) return rrIn == null ? Collections.emptyList() : rrIn;
+
+        // mediana
+        double med;
+        {
+            List<Integer> s = new ArrayList<>(rrIn);
+            Collections.sort(s);
+            int n = s.size();
+            med = (n % 2 == 1) ? s.get(n/2) : (s.get(n/2 - 1) + s.get(n/2)) / 2.0;
+        }
+
+        // 300–2000 ms i |RR - med| <= 120 ms
         List<Integer> out = new ArrayList<>();
-        for (int v : rr) if (v >= 300 && v <= 2000) out.add(v);
+        for (int r : rrIn) {
+            if (r >= 300 && r <= 2000 && Math.abs(r - med) <= 120) out.add(r);
+        }
+
+        // fallbacky
+        if (out.size() < 2) {
+            out.clear();
+            for (int r : rrIn) if (r >= 300 && r <= 2000) out.add(r);
+            if (out.size() < 2) return rrIn; // ostatecznie zwróć oryginał
+        }
         return out;
     }
 
+    /** Metryki HRV z oczyszczonych RR. */
     static HRVCoreResult compute(List<Integer> rr) {
         HRVCoreResult r = new HRVCoreResult();
-        if (rr == null || rr.isEmpty()) return r;
+        if (rr == null || rr.size() < 2) return r;
 
-        // mean RR / HR
-        double sum = 0;
-        int minRR = Integer.MAX_VALUE, maxRR = Integer.MIN_VALUE;
-        for (int v : rr) { sum += v; if (v<minRR) minRR=v; if (v>maxRR) maxRR=v; }
-        double meanRR = sum / rr.size();
+        // HR z meanRR
+        double meanRR = rr.stream().mapToInt(Integer::intValue).average().orElse(0.0);
         r.meanHr = meanRR > 0 ? (int)Math.round(60000.0 / meanRR) : 0;
 
-        // ΔRR
-        List<Double> diffs = new ArrayList<>();
-        for (int i = 1; i < rr.size(); i++) diffs.add((double)(rr.get(i) - rr.get(i - 1)));
+        // RMSSD
+        double sumSq = 0.0; int pairs = 0;
+        for (int i = 1; i < rr.size(); i++) { double d = rr.get(i) - rr.get(i-1); sumSq += d*d; pairs++; }
+        r.rmssdMs = pairs > 0 ? Math.sqrt(sumSq / pairs) : 0.0;
 
-        // RMSSD, pNN20
-        if (!diffs.isEmpty()) {
-            double sumSq = 0; int over20 = 0;
-            for (double d : diffs) { sumSq += d*d; if (Math.abs(d) > 20) over20++; }
-            r.rmssdMs = Math.sqrt(sumSq / diffs.size());
-            r.pnn20 = over20 / (double)diffs.size();
-        } else {
-            r.rmssdMs = 0; r.pnn20 = 0;
-        }
+        // SDNN = odchylenie standardowe RR
+        double mean = rr.stream().mapToInt(Integer::intValue).average().orElse(0.0);
+        double var = 0.0;
+        for (int g : rr) { double d = g - mean; var += d*d; }
+        var = rr.size() > 1 ? var / (rr.size() - 1) : 0.0;
+        r.sdnnMs = Math.sqrt(var);
+
 
         // SD1
         r.sd1Ms = r.rmssdMs / Math.sqrt(2.0);
 
-        // Baevsky SI
-        double mxDmn = (minRR == Integer.MAX_VALUE || maxRR == Integer.MIN_VALUE) ? 0 : (maxRR - minRR);
-        Hist h = histogram(rr, 50); // bin 50 ms
-        double Mo = h.modeCenterMs;           // modal RR [ms]
-        double AMo = rr.isEmpty() ? 0 : (h.modeCount * 100.0 / rr.size()); // %
-        r.baevskySI = (Mo > 0 && mxDmn > 0) ? (AMo / (2.0 * Mo * mxDmn)) : 0;
+        // pNN20
+        int nn20 = 0;
+        for (int i = 1; i < rr.size(); i++) if (Math.abs(rr.get(i) - rr.get(i-1)) > 20) nn20++;
+        r.pnn20 = pairs > 0 ? (double)nn20 / pairs : 0.0;
+
 
         return r;
-    }
-
-    // --- helpers ---
-    private static class Hist { double modeCenterMs = 0; int modeCount = 0; }
-    private static Hist histogram(List<Integer> rr, int binMs) {
-        Hist res = new Hist();
-        if (rr.isEmpty()) return res;
-        int min = Collections.min(rr), max = Collections.max(rr);
-        if (min == max) { res.modeCenterMs = min; res.modeCount = rr.size(); return res; }
-
-        int bins = Math.max(1, ((max - min) / binMs) + 1);
-        int[] cnt = new int[bins];
-        for (int v : rr) {
-            int idx = Math.min(bins - 1, Math.max(0, (v - min) / binMs));
-            cnt[idx]++;
-        }
-        int bestIdx = 0, best = 0;
-        for (int i = 0; i < bins; i++) if (cnt[i] > best) { best = cnt[i]; bestIdx = i; }
-        res.modeCount = best;
-        res.modeCenterMs = min + bestIdx * binMs + binMs / 2.0;
-        return res;
     }
 }
