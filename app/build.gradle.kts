@@ -51,6 +51,7 @@ dependencies {
     implementation("com.github.PhilJay:MPAndroidChart:v3.1.0")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("org.json:json:20231013")
+    implementation("io.noties.markwon:core:4.6.2")
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.ext.junit)

@@ -1,5 +1,7 @@
 package com.example.hackyeah;
 
+import androidx.annotation.Nullable;
+
 import org.json.JSONObject;
 
 public class SessionSummary {
@@ -13,6 +15,10 @@ public class SessionSummary {
     public double pnn20;       // 0..1
 
     public double sdnnMs;
+
+    @Nullable
+    public Integer stressScore;   // null until LLM finishes
+    @Nullable public String  llmReportMd;   // raw markdown from LLM
 
 
     public String note = "";

@@ -34,6 +34,7 @@
 
     <string name="results_title">Last Measurement</string>
     <string name="action_generate_report">Generate Report</string>
+    <string name="response_generate_report">(The generated report will appear here)</string>
     <string name="nav_home">Home</string>
     <string name="nav_last_report">Results</string>
     <string name="nav_history">History</string>

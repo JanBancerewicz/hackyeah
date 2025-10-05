@@ -78,11 +78,25 @@
                     android:textSize="18sp"
                     android:layout_marginBottom="8dp"/>
 
-                <SurfaceView
-                    android:id="@+id/surfaceView"
+                <!-- Camera preview with heart mask -->
+                <FrameLayout
+                    android:id="@+id/previewContainer"
                     android:layout_width="match_parent"
-                    android:layout_height="200dp"
-                    android:visibility="visible"/>
+                    android:layout_height="220dp">
+
+                    <SurfaceView
+                        android:id="@+id/surfaceView"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:visibility="visible" />
+
+                    <!-- Overlay that dims everything except a heart-shaped hole -->
+                    <com.example.hackyeah.HeartMaskView
+                        android:id="@+id/heartMask"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent" />
+                </FrameLayout>
+
 
                 <com.github.mikephil.charting.charts.LineChart
                     android:id="@+id/lineChart"

@@ -11,12 +11,24 @@ import android.view.SurfaceView;
 import android.view.View;
 import android.widget.*;
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsCompat;
+
+import android.content.res.ColorStateList;
+import android.graphics.drawable.GradientDrawable;
+import android.util.TypedValue;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Locale;
+
+import android.content.res.ColorStateList;
+import android.graphics.Color;
+
 
 import com.github.mikephil.charting.charts.LineChart;
 
@@ -53,6 +65,8 @@ public class MainActivity extends Activity {
     private ChartController chart;
     private MeasurementTimer measurementTimer;
 
+    private HeartMaskView heartMask;
+
     private final List<Long> peakTimestamps = new ArrayList<>();
 
     @Override
@@ -69,6 +83,11 @@ public class MainActivity extends Activity {
         measurementProgress = findViewById(R.id.measurementProgress);
         surfaceView = findViewById(R.id.surfaceView);
         lineChart = findViewById(R.id.lineChart);
+
+        heartMask = findViewById(R.id.heartMask);
+        if (heartMask != null) {
+            heartMask.setHeartScale(1.0f); // even bigger than default 0.98 if you want
+        }
 
         surfaceHolder = surfaceView.getHolder();
         surfaceHolder.addCallback(new SurfaceHolder.Callback() {
@@ -209,9 +228,11 @@ public class MainActivity extends Activity {
 
     private void startMeasurementNow() {
         try {
-            cameraController.requestStartRecording(); // otworzy kamerę, gdy potrzeba, i wystartuje dopiero na ważnym Surface
+            if (heartMask != null) heartMask.startPulse();
+            cameraController.requestStartRecording();
             measurementTimer.start(startTime, MAX_MEASUREMENT_MS);
         } catch (Exception e) {
+            if (heartMask != null) heartMask.stopPulse();
             Toast.makeText(this, "Błąd nagrywania", Toast.LENGTH_SHORT).show();
             Log.e("Start recording error", e.toString());
             isRecording = false;
@@ -222,6 +243,7 @@ public class MainActivity extends Activity {
 
     private void manualStop() {
         stopAndSaveSession();
+        if (heartMask != null) heartMask.stopPulse();
         measurementTimer.stop();
         measurementProgress.setProgress(0);
         Button toggle = findViewById(R.id.buttonToggle);
@@ -235,6 +257,7 @@ public class MainActivity extends Activity {
 
     private void autoStopMeasurement() {
         try {
+            if (heartMask != null) heartMask.stopPulse();
             stopAndSaveSession();           // zapis ostatniego pomiaru do LocalStore
         } catch (Exception e) {
             Log.e("AutoStop", "stop error", e);
@@ -321,8 +344,9 @@ public class MainActivity extends Activity {
     private void renderHistoryList() {
         if (historyList == null) return;
         historyList.removeAllViews();
-        List<SessionSummary> last = LocalStore.getLast(this, 5);
-        if (last.isEmpty()) {
+
+        List<SessionSummary> items = LocalStore.getLast(this, 5);
+        if (items.isEmpty()) {
             TextView empty = new TextView(this);
             empty.setText("No measurements yet");
             empty.setTextSize(14f);
@@ -331,20 +355,107 @@ public class MainActivity extends Activity {
             return;
         }
 
-        java.text.SimpleDateFormat hhmm = new java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault());
-        for (SessionSummary s : last) {
-            TextView row = new TextView(this);
-            row.setLayoutParams(new LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
-            row.setTextSize(14f);
-            row.setTextColor(0xFF222222);
-            String timeStr = (s.startTs > 0) ? hhmm.format(new java.util.Date(s.startTs)) : "--:--";
-            String line = timeStr + " • HR " + s.meanHr + " bpm • RMSSD " + Math.round(s.rmssdMs) + " ms • " + s.durationSec + " s";
-            row.setText(line);
-            row.setPadding(0, 6, 0, 6);
-            historyList.addView(row);
+        SimpleDateFormat fmt = new SimpleDateFormat("dd MMM, HH:mm", Locale.getDefault());
+
+        for (SessionSummary s : items) {
+            LinearLayout card = new LinearLayout(this);
+            card.setOrientation(LinearLayout.VERTICAL);
+            LinearLayout.LayoutParams lpCard = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+            );
+            lpCard.setMargins(0, dp(6), 0, dp(6));
+            card.setLayoutParams(lpCard);
+            card.setPadding(dp(12), dp(10), dp(12), dp(12));
+            card.setBackground(roundedCardBg());
+
+            TextView title = new TextView(this);
+            title.setTextColor(0xFF222222);
+            title.setTextSize(15f);
+            String timeStr = (s.startTs > 0) ? fmt.format(new Date(s.startTs)) : "-- --, --:--";
+            title.setText(timeStr + "  •  HR " + s.meanHr + " bpm");
+            card.addView(title);
+
+            View spacer = new View(this);
+            spacer.setLayoutParams(new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, dp(6)));
+            card.addView(spacer);
+
+            if (s.stressScore != null) {
+                TextView label = new TextView(this);
+                label.setText("Stress");
+                label.setTextColor(0xFF666666);
+                label.setTextSize(13f);
+                card.addView(label);
+
+                ProgressBar pb = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
+                LinearLayout.LayoutParams lpPb = new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT, dp(10));
+                pb.setLayoutParams(lpPb);
+                pb.setIndeterminate(false);
+                pb.setMax(10);
+                int cl = colorForStress(s.stressScore);
+                pb.setProgress(Math.max(0, Math.min(10, s.stressScore)));
+                pb.setProgressTintList(ColorStateList.valueOf(cl));
+                pb.setProgressBackgroundTintList(ColorStateList.valueOf(withAlpha(cl, 60))); // subtle track
+                card.addView(pb);
+
+                TextView score = new TextView(this);
+                score.setText(s.stressScore + "/10");
+                score.setTextColor(0xFF444444);
+                score.setTextSize(13f);
+                score.setPadding(0, dp(4), 0, 0);
+                card.addView(score);
+            } else {
+                Button go = new Button(this);
+                go.setAllCaps(false);
+                go.setText("Generate report");
+                go.setTextColor(0xFFFFFFFF);
+                go.setBackgroundTintList(ColorStateList.valueOf(0xFF3F51B5));
+                go.setOnClickListener(v -> {
+                    Intent i = new Intent(MainActivity.this, ResultsActivity.class);
+                    i.putExtra(ResultsActivity.EXTRA_SESSION_START_TS, s.startTs);
+                    startActivity(i);
+                });
+                card.addView(go);
+            }
+
+            card.setOnClickListener(v -> {
+                Intent i = new Intent(MainActivity.this, ResultsActivity.class);
+                i.putExtra(ResultsActivity.EXTRA_SESSION_START_TS, s.startTs);
+                startActivity(i);
+            });
+
+            historyList.addView(card);
         }
     }
+
+    /** 1 -> green, 9 -> red; values between are interpolated. Null -> neutral gray. */
+    private int colorForStress(@Nullable Integer score) {
+        if (score == null) return 0xFFBDBDBD; // neutral
+        int s = Math.max(1, Math.min(9, score));
+        float t = (s - 1f) / 8f; // 0..1
+        // Material-ish greens/reds
+        final int start = 0xFF2E7D32; // green-800
+        final int end   = 0xFFC62828; // red-800
+        return lerpColor(start, end, t);
+    }
+
+    private int lerpColor(int start, int end, float t) {
+        int a = Math.round(Color.alpha(start) + t * (Color.alpha(end) - Color.alpha(start)));
+        int r = Math.round(Color.red(start)   + t * (Color.red(end)   - Color.red(start)));
+        int g = Math.round(Color.green(start) + t * (Color.green(end) - Color.green(start)));
+        int b = Math.round(Color.blue(start)  + t * (Color.blue(end)  - Color.blue(start)));
+        return Color.argb(a, r, g, b);
+    }
+
+    private int withAlpha(int color, int alpha) {
+        return Color.argb(alpha, Color.red(color), Color.green(color), Color.blue(color));
+    }
+
+
+
+
 
     private void appendLogToFile(String text, int logtype) {
         String prefix = (logtype == 2) ? "pulse" : (logtype == 1) ? "breath" : null;
@@ -377,6 +488,20 @@ public class MainActivity extends Activity {
             }
         }
     }
+
+    private int dp(int v) {
+        return Math.round(TypedValue.applyDimension(
+                TypedValue.COMPLEX_UNIT_DIP, v, getResources().getDisplayMetrics()));
+    }
+
+    private GradientDrawable roundedCardBg() {
+        GradientDrawable d = new GradientDrawable();
+        d.setColor(0xFFFFFFFF);              // white
+        d.setCornerRadius(dp(12));
+        d.setStroke(dp(1), 0xFFE0E0E0);      // light gray border
+        return d;
+    }
+
 
     // bottom nav
     public void onNavHome(View v) { if (rootScroll != null) rootScroll.smoothScrollTo(0, 0); }

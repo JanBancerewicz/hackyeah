@@ -8,6 +8,13 @@ import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
 import android.widget.Toast;
+import io.noties.markwon.Markwon;
+import java.util.regex.*;
+
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import androidx.annotation.Nullable;
+import io.noties.markwon.Markwon;
 
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
@@ -26,7 +33,14 @@ public class ResultsActivity extends AppCompatActivity {
     private TextView resultHr, resultHrv;
     private TextView resultRMSSD, resultSD1, resultPNN20, resultMeta;
     private TextView resultReport;
+    private Markwon markwon;
     private EditText userNotes;
+    private long selectedStartTs = -1L;
+
+    public static final String EXTRA_SESSION_START_TS = "extra_session_start_ts";
+
+
+
     @Nullable private SessionSummary last;
 
     @Override
@@ -44,6 +58,7 @@ public class ResultsActivity extends AppCompatActivity {
         userNotes   = findViewById(R.id.userNotes);
 
         resultReport = findViewById(R.id.resultReport);
+        markwon = Markwon.create(this);
 
         Button gen = findViewById(R.id.buttonGenerateReport);
         gen.setOnClickListener(v -> onGenerateReport());
@@ -73,19 +88,71 @@ public class ResultsActivity extends AppCompatActivity {
             v.setPaddingRelative(bStart, bTop, bEnd, bBot0 + navIme.bottom);
             return insets;
         });
+        selectedStartTs = getIntent().getLongExtra("session_start_ts", -1L);
+        // ResultsActivity.java — onCreate(): after setContentView(...)
+        long targetStartTs = getIntent().getLongExtra(EXTRA_SESSION_START_TS, -1L);
+        if (targetStartTs > 0) {
+            SessionSummary s = LocalStore.getByStartTs(this, targetStartTs);
+            if (s != null) {
+                last = s;
+                bindSessionToUi(s);  // new small helper (below)
+            } else {
+                // fallback – not found
+                loadLastSession();
+            }
+        } else {
+            loadLastSession();
+        }
 
-        loadLastSession();
     }
 
+    // ResultsActivity.java — add this method
+    private void bindSessionToUi(SessionSummary s) {
+        // HR
+        resultHr.setText(String.format(Locale.getDefault(), "%d bpm", Math.max(0, s.meanHr)));
+
+        // HRV headline: prefer SDNN, fallback RMSSD
+        double hrvMs = (s.sdnnMs > 0) ? s.sdnnMs : s.rmssdMs;
+        resultHrv.setText(String.format(Locale.getDefault(), "HRV: %d ms", Math.round(hrvMs)));
+
+        // Details
+        resultRMSSD.setText(String.format(Locale.getDefault(), "RMSSD: %d ms", Math.round(s.rmssdMs)));
+        resultSD1.setText(String.format(Locale.getDefault(), "SD1: %d ms", Math.round(s.sd1Ms)));
+        resultPNN20.setText(String.format(Locale.getDefault(), "pNN20: %.2f", s.pnn20));
+
+        String when = android.text.format.DateFormat.format("yyyy-MM-dd  HH:mm", s.startTs).toString();
+        resultMeta.setText(String.format(Locale.getDefault(), "Duration: %d s  •  When: %s", s.durationSec, when));
+
+        // keep `last` in sync
+        last = s;
+    }
+
+
+    @Nullable
+    private Integer parseStressScore(String md) {
+        if (md == null) return null;
+        String firstLine = md.split("\\R", 2)[0];
+        // matches: "7", "7/10", "**7/10**", "7 – moderate", "Stress: 7/10", etc.
+        Pattern p = Pattern.compile("(^|\\b)([1-9]|10)\\s*(?:/\\s*10)?\\b");
+        Matcher m = p.matcher(firstLine);
+        return m.find() ? Integer.parseInt(m.group(2)) : null;
+    }
+
+
     private void loadLastSession() {
-        List<SessionSummary> list = LocalStore.getLast(this, 1);
-        if (list.isEmpty()) {
-            setPlaceholders();
-            Toast.makeText(this, R.string.msg_no_last_session, Toast.LENGTH_SHORT).show();
-            last = null;
-            return;
+        if (selectedStartTs > 0) {
+            last = LocalStore.getByStartTs(this, selectedStartTs);
+            if (last == null) {
+                // fallback to most recent
+                List<SessionSummary> list = LocalStore.getLast(this, 1);
+                if (list.isEmpty()) { setPlaceholders(); Toast.makeText(this, R.string.msg_no_last_session, Toast.LENGTH_SHORT).show(); return; }
+                last = list.get(0);
+            }
+        } else {
+            List<SessionSummary> list = LocalStore.getLast(this, 1);
+            if (list.isEmpty()) { setPlaceholders(); Toast.makeText(this, R.string.msg_no_last_session, Toast.LENGTH_SHORT).show(); return; }
+            last = list.get(0);
         }
-        last = list.get(0);
 
         // HR
         resultHr.setText(String.format(Locale.getDefault(), "%d bpm", Math.max(0, last.meanHr)));
@@ -101,6 +168,13 @@ public class ResultsActivity extends AppCompatActivity {
 
         String when = android.text.format.DateFormat.format("yyyy-MM-dd  HH:mm", last.startTs).toString();
         resultMeta.setText(String.format(Locale.getDefault(), "Duration: %d s  •  When: %s", last.durationSec, when));
+
+        // Auto-generate if requested
+        boolean auto = getIntent().getBooleanExtra("auto_generate", false);
+        if (auto) {
+            Button gen = findViewById(R.id.buttonGenerateReport);
+            if (gen != null && gen.isEnabled()) onGenerateReport();
+        }
     }
 
     private void setPlaceholders() {
@@ -137,7 +211,7 @@ public class ResultsActivity extends AppCompatActivity {
         gen.setEnabled(false);
         gen.setAlpha(0.6f);
         userNotes.setEnabled(false);
-        if (resultReport != null) resultReport.setText("Generating report…");
+        if (resultReport != null) markwon.setMarkdown(resultReport, "Generating report_");
 
         // Klucz API
         final String apiKey = getString(R.string.gemini_api_key);
@@ -155,68 +229,116 @@ public class ResultsActivity extends AppCompatActivity {
             @Override public void onSuccess(String text) {
                 android.util.Log.i("Gemini",
                         "\n===== LLM RESPONSE =====\n" + text + "\n=======================\n");
+
+                // 1) Parse stress score from the first non-empty line (1–10)
+                @Nullable Integer stress = extractStressScore(text);
+                android.util.Log.i("GeminiParse",
+                        "Parsed stress score = " + (stress == null ? "null" : stress));
+
+                // 2) Save into JSON (append/update last session)
+                if (last != null) {
+                    LocalStore.setLlmResult(ResultsActivity.this, last.startTs, stress, text);
+                }
+
+                // 3) Render Markdown in the resultReport TextView
                 runOnUiThread(() -> {
                     if (resultReport != null) {
-                        resultReport.setText((text == null || text.isEmpty())
-                                ? "(Brak treści odpowiedzi)"
-                                : text);
+                        Markwon markwon = Markwon.create(ResultsActivity.this);
+                        if (text == null || text.isEmpty()) {
+                            resultReport.setText("(Empty LLM response)");
+                        } else {
+                            markwon.setMarkdown(resultReport, text);
+                        }
                     }
                     Toast.makeText(ResultsActivity.this,
-                            "Report generated (zobacz Logcat)", Toast.LENGTH_SHORT).show();
-                    // przycisk i pole nastroju zostają zablokowane (jak prosiłeś)
+                            "Report generated (see Logcat)", Toast.LENGTH_SHORT).show();
+                    // Keep button + mood field disabled as you wanted
                 });
             }
 
             @Override public void onError(String message, Throwable t) {
                 android.util.Log.e("Gemini", "Error: " + message, t);
                 runOnUiThread(() -> {
-                    if (resultReport != null) resultReport.setText("LLM error: " + message);
+                    if (resultReport != null) {
+                        markwon.setMarkdown(resultReport, "**Błąd generowania raportu:** " + message);
+                    }
                     gen.setEnabled(true); gen.setAlpha(1f);
                     userNotes.setEnabled(true);
-                    Toast.makeText(ResultsActivity.this,
-                            "LLM error: " + message, Toast.LENGTH_SHORT).show();
+                    Toast.makeText(ResultsActivity.this, "LLM error: " + message, Toast.LENGTH_SHORT).show();
                 });
             }
         });
     }
 
+    @Nullable
+    private Integer extractStressScore(@Nullable String md) {
+        if (md == null) return null;
+
+        // First non-empty line only
+        String first = null;
+        for (String line : md.split("\\r?\\n")) {
+            String t = line.trim();
+            if (!t.isEmpty()) { first = t; break; }
+        }
+        if (first == null) return null;
+
+        // Examples to match:
+        // "7 – moderate", "Stress: 6/10", "8/10 (high)", "9"
+        Pattern p = Pattern.compile(
+                "^(?:\\**\\s*)?(?:stress\\s*[:=-]\\s*)?(\\d{1,2})(?:\\s*/\\s*10)?\\b",
+                Pattern.CASE_INSENSITIVE);
+        Matcher m = p.matcher(first);
+        if (!m.find()) {
+            android.util.Log.i("GeminiParse", "No score found in first line: " + first);
+            return null;
+        }
+        try {
+            int v = Integer.parseInt(m.group(1));
+            if (v >= 1 && v <= 10) return v;
+            android.util.Log.i("GeminiParse", "Out-of-range score: " + v + " (line: " + first + ")");
+            return null;
+        } catch (NumberFormatException e) {
+            android.util.Log.i("GeminiParse", "Parse error in line: " + first, e);
+            return null;
+        }
+    }
+
+
 
     // Wersja preferowana – z jawnie przekazanym hrvMs
+    // Replace your existing buildStressPrompt(...) with this:
     private String buildStressPrompt(String mood, SessionSummary s, double hrvMs) {
-        // HRV do raportu: preferuj SDNN, fallback na RMSSD
         double sdnn = (s.sdnnMs > 0) ? s.sdnnMs : ((hrvMs > 0) ? hrvMs : s.rmssdMs);
-
-        String moodText = (mood == null || mood.trim().isEmpty()) ? "(brak opisu)" : mood.trim();
+        String moodText = (mood == null || mood.trim().isEmpty()) ? "(no description)" : mood.trim();
         long ts = (s.startTs > 0) ? s.startTs : System.currentTimeMillis();
         String timeStr = formatLocalTime(ts);
         String daypart = daypartFromMillis(ts);
-        String pnn20Str = String.format(java.util.Locale.getDefault(), "%.2f", s.pnn20);
+        String pnn20Str = String.format(java.util.Locale.US, "%.2f", s.pnn20);
 
-        return "Jesteś asystentem AI analizującym stres i samopoczucie.\n" +
-                "Na podstawie poniższych danych określ Poziom Stresu (1–10) i napisz krótki raport w formie bezpośredniego zwrotu do użytkownika. " +
-                "Raport ma być spójny, angażujący i przypominać opis, nie listę punktów. " +
-                "Skrajne wartości traktuj jako potencjalne artefakty – opisuj je po prostu jako „podwyższone/obniżone”, bez dramatyzowania.\n\n" +
+        return ""
+                + "You are an AI assistant analyzing stress and wellbeing. "
+                + "Using the data below, estimate a **Stress Level (1–10)** and write a short **markdown-formatted** report addressed directly to the user.\n\n"
 
-                "Dane wejściowe:\n" +
-                "- Samopoczucie: " + moodText + "\n" +
-                "- Tętno (BPM): " + Math.max(0, s.meanHr) + "\n" +
-                "- HRV (SDNN): " + Math.round(sdnn) + " ms\n" +
-                "- RMSSD: " + Math.round(s.rmssdMs) + " ms\n" +
-                "- SD1: " + Math.round(s.sd1Ms) + " ms\n" +
-                "- pNN20: " + pnn20Str + "\n" +
-                "- Czas pomiaru: " + s.durationSec + " s\n" +
-                "- Godzina pomiaru: " + timeStr + "\n" +
-                "- Pora dnia: " + daypart + "\n\n" +
+                + "**Input**\n"
+                + "- Mood: " + moodText + "\n"
+                + "- Heart rate (BPM): " + Math.max(0, s.meanHr) + "\n"
+                + "- HRV (SDNN): " + Math.round(sdnn) + " ms\n"
+                + "- RMSSD: " + Math.round(s.rmssdMs) + " ms\n"
+                + "- SD1: " + Math.round(s.sd1Ms) + " ms\n"
+                + "- pNN20: " + pnn20Str + "\n"
+                + "- Measurement duration: " + s.durationSec + " s\n"
+                + "- Time of measurement: " + timeStr + " (" + daypart + ")\n\n"
 
-                "- Raport powinien zawierać:\n" +
-                "- Pierwsza linia z liczbą w skali 1–10 oraz etykietą (1=„bardzo niski”… 5=„umiarkowany”… 10=„bardzo wysoki”).\n" +
-                "- Obserwacje wynikające z danych (HR, HRV, RMSSD, SD1, pNN20, opis samopoczucia) – bez powtarzania samych liczb, tylko interpretacja.\n" +
-                "- Odniesienie do godziny/pory dnia pomiaru i możliwego wpływu na wynik.\n" +
-                "- Praktyczne wskazówki (oddech, mikroprzerwa, ruch, sen) – zwięźle.\n" +
-                "- Jedna krótka ciekawostka o stresie/śnie/HRV w prostych słowach.\n" +
-                "- Zakończenie w tonie wspierającym.\n" +
-                "Pisz zwięźle: maksymalnie kilka krótkich akapitów.";
+                + "**Instructions**\n"
+                + "- First line: only the number 1–10 plus a label in parentheses (1 = very low … 5 = moderate … 10 = very high).\n"
+                + "- Write 2–4 short paragraphs (no bullet lists). Interpret the data rather than repeating raw numbers.\n"
+                + "- **Bold** key insights and user-relevant takeaways; use *italics* sparingly.\n"
+                + "- Treat extreme values as potential artifacts; describe them neutrally as **elevated** or **reduced** (avoid exaggeration).\n"
+                + "- Include practical tips (breathing, micro-breaks, light movement, sleep hygiene) and **one short fun fact** about stress/sleep/HRV.\n"
+                + "- Reference the time of day if relevant (e.g., morning vs evening effects).\n"
+                + "- Keep it concise, friendly, and end with a supportive closing.";
     }
+
 
     private String formatLocalTime(long tsMillis) {
         java.text.SimpleDateFormat fmt = new java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault());
