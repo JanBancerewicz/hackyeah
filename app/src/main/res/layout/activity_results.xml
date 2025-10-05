@@ -22,15 +22,16 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
-        <TextView
-            android:id="@+id/appTitle"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="@string/app_header"
-            android:textSize="20sp"
-            android:textStyle="bold"
-            android:textColor="#222222"/>
+        <ImageView
+        android:id="@+id/appLogo"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:adjustViewBounds="true"
+        android:maxHeight="250dp"
+        android:scaleType="fitStart"
+        android:contentDescription="@string/app_name"
+        app:srcCompat="@drawable/app_logo" />
 
         <Button
             android:id="@+id/buttonToggle"
@@ -38,8 +39,10 @@
             android:layout_height="wrap_content"
             android:text="@string/measurement_button_goback"
             android:onClick="onHeaderGoToMain"
-            android:backgroundTint="#E91E63"
-            android:textColor="@android:color/white" />
+            android:width="140sp"
+            android:textStyle="bold"
+            android:textColor="@android:color/white"
+            android:background="@drawable/bg_btn_red" />
     </LinearLayout>
 
     <!-- Scrollowalna treść -->
@@ -168,9 +171,12 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
+                android:minHeight="48dp"
+                android:paddingVertical="12dp"
                 android:text="@string/action_generate_report"
-                android:backgroundTint="#3F51B5"
-                android:textColor="@android:color/white" />
+                android:textStyle="bold"
+                android:textColor="@android:color/white"
+                android:background="@drawable/bg_btn_green" />
 
             <!-- Duże pole na wynik raportu AI -->
             <LinearLayout
@@ -220,39 +226,39 @@
         app:layout_constraintEnd_toEndOf="parent">
 
         <Button
-            style="@style/NavButtonStyle"
             android:id="@+id/navHome"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:text="@string/nav_home"
+            android:textSize="13sp"
             android:onClick="onNavHome"/>
 
         <Button
-            style="@style/NavButtonStyle"
             android:id="@+id/navLast"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:text="@string/nav_last_report"
+            android:textSize="13sp"
             android:onClick="onNavLast"/>
 
         <Button
-            style="@style/NavButtonStyle"
             android:id="@+id/navHistory"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:text="@string/nav_history"
+            android:textSize="13sp"
             android:onClick="onNavHistory"/>
 
         <Button
-            style="@style/NavButtonStyle"
             android:id="@+id/navSettings"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:text="@string/nav_settings"
+            android:textSize="13sp"
             android:onClick="onNavSettings"/>
     </LinearLayout>
 

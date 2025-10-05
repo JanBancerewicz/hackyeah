@@ -2,12 +2,13 @@
 <androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="#F5F5F5"
-    tools:context="com.example.hackyeah.MainActivity">
+    tools:context="com.example.hackyeah.HistoryActivity">
 
-    <!-- NAGŁÓWEK PRZYKLEJONY U GÓRY -->
+    <!-- HEADER (jak w activity_main) -->
     <LinearLayout
         android:id="@+id/headerBar"
         android:layout_width="0dp"
@@ -34,22 +35,19 @@
             android:contentDescription="@string/app_name"
             android:src="@drawable/app_logo" />
 
-
-
         <Button
             android:id="@+id/buttonToggle"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="@string/measurement_button_start"
-            android:onClick="onToggleRecording"
             android:width="140sp"
             android:textStyle="bold"
             android:textColor="@android:color/white"
+            android:text="@string/measurement_button_goback"
+            android:onClick="onHeaderGoToMain"
             android:background="@drawable/bg_btn_red" />
     </LinearLayout>
 
-
-    <!-- SCROLLABLE CONTENT POD NAGŁÓWKIEM -->
+    <!-- CONTENT: tylko karta historii, zajmuje stronę -->
     <ScrollView
         android:id="@+id/rootScroll"
         android:layout_width="0dp"
@@ -65,116 +63,8 @@
             android:orientation="vertical"
             android:padding="16dp">
 
-            <!-- Karta: podgląd + wykres (UKRYTE NA START) -->
             <LinearLayout
-                android:id="@+id/liveCard"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:background="@android:color/white"
-                android:padding="16dp"
-                android:layout_marginBottom="12dp">
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/label_live_signal"
-                    android:textStyle="bold"
-                    android:textSize="18sp"
-                    android:layout_marginBottom="8dp"/>
-
-                <!-- Camera preview with heart mask -->
-                <FrameLayout
-                    android:id="@+id/previewContainer"
-                    android:layout_width="match_parent"
-                    android:layout_height="220dp">
-
-                    <SurfaceView
-                        android:id="@+id/surfaceView"
-                        android:layout_width="match_parent"
-                        android:layout_height="match_parent"
-                        android:visibility="visible" />
-
-                    <!-- Overlay that dims everything except a heart-shaped hole -->
-                    <com.example.hackyeah.HeartMaskView
-                        android:id="@+id/heartMask"
-                        android:layout_width="match_parent"
-                        android:layout_height="match_parent" />
-                </FrameLayout>
-
-
-                <com.github.mikephil.charting.charts.LineChart
-                    android:id="@+id/lineChart"
-                    android:layout_width="match_parent"
-                    android:layout_height="180dp"
-                    android:layout_marginTop="12dp"
-                    android:visibility="gone"/>
-            </LinearLayout>
-
-            <!-- Karta: HR + HRV + timer + progress -->
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:background="@android:color/white"
-                android:padding="16dp"
-                android:layout_marginBottom="12dp">
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/label_resting_hr"
-                    android:textStyle="bold"
-                    android:textSize="18sp"
-                    android:layout_marginBottom="8dp"/>
-
-                <TextView
-                    android:id="@+id/heartRateTextView"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/value_hr_placeholder"
-                    android:textSize="24sp"
-                    android:textStyle="bold"
-                    android:textColor="#222222"/>
-
-                <TextView
-                    android:id="@+id/hrvTextView"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/value_hrv_placeholder"
-                    android:textSize="18sp"
-                    android:layout_marginTop="4dp"/>
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal"
-                    android:gravity="center_vertical"
-                    android:layout_marginTop="8dp">
-
-                    <TextView
-                        android:id="@+id/timerTextView"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:text="@string/timer_placeholder"
-                        android:textSize="18sp" />
-
-                    <ProgressBar
-                        android:id="@+id/measurementProgress"
-                        style="?android:attr/progressBarStyleHorizontal"
-                        android:layout_width="0dp"
-                        android:layout_height="8dp"
-                        android:layout_weight="2"
-                        android:layout_marginEnd="8dp"
-                        android:max="20"
-                        android:progress="0"
-                        android:indeterminate="false" />
-                </LinearLayout>
-            </LinearLayout>
-
-            <!-- Karta: Recent measurements -->
-            <LinearLayout
+                android:id="@+id/historyCard"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
@@ -188,6 +78,7 @@
                     android:text="@string/label_recent_measurements"
                     android:textStyle="bold"
                     android:textSize="18sp"
+                    android:textColor="#222222"
                     android:layout_marginBottom="8dp"/>
 
                 <LinearLayout
@@ -200,7 +91,7 @@
         </LinearLayout>
     </ScrollView>
 
-    <!-- STICKY BOTTOM NAV -->
+    <!-- BOTTOM NAV (jak w activity_main) -->
     <LinearLayout
         android:id="@+id/bottomNav"
         android:layout_width="0dp"

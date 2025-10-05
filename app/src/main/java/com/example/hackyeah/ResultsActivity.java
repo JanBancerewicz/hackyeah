@@ -251,7 +251,7 @@ public class ResultsActivity extends AppCompatActivity {
                         }
                     }
                     Toast.makeText(ResultsActivity.this,
-                            "Report generated (see Logcat)", Toast.LENGTH_SHORT).show();
+                            "Report generated", Toast.LENGTH_SHORT).show();
                     // Keep button + mood field disabled as you wanted
                 });
             }
@@ -376,8 +376,10 @@ public class ResultsActivity extends AppCompatActivity {
         Toast.makeText(this, R.string.msg_refreshed, Toast.LENGTH_SHORT).show();
     }
     public void onNavHistory(View v) {
-        Toast.makeText(this, R.string.todo_history, Toast.LENGTH_SHORT).show();
+        startActivity(new Intent(this, HistoryActivity.class));
+        finish();
     }
+
     public void onNavSettings(View v) {
         Toast.makeText(this, R.string.todo_settings, Toast.LENGTH_SHORT).show();
     }

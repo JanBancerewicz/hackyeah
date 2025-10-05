@@ -4,6 +4,7 @@ import android.Manifest;
 import android.app.Activity;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.graphics.Typeface;
 import android.os.*;
 import android.util.Log;
 import android.view.SurfaceHolder;
@@ -408,10 +409,12 @@ public class MainActivity extends Activity {
                 card.addView(score);
             } else {
                 Button go = new Button(this);
-                go.setAllCaps(false);
-                go.setText("Generate report");
+                go.setAllCaps(true);
+                go.setText("Inspect results");
+                go.setTypeface(null, Typeface.BOLD);
                 go.setTextColor(0xFFFFFFFF);
                 go.setBackgroundTintList(ColorStateList.valueOf(0xFF3F51B5));
+                go.setBackgroundResource(R.drawable.bg_btn_green);
                 go.setOnClickListener(v -> {
                     Intent i = new Intent(MainActivity.this, ResultsActivity.class);
                     i.putExtra(ResultsActivity.EXTRA_SESSION_START_TS, s.startTs);
@@ -506,6 +509,7 @@ public class MainActivity extends Activity {
     // bottom nav
     public void onNavHome(View v) { if (rootScroll != null) rootScroll.smoothScrollTo(0, 0); }
     public void onNavLast(View v) { startActivity(new Intent(this, ResultsActivity.class)); }
-    public void onNavHistory(View v) { Toast.makeText(this, R.string.todo_history, Toast.LENGTH_SHORT).show(); }
+    public void onNavHistory(View v) { startActivity(new Intent(this, HistoryActivity.class)); }
+
     public void onNavSettings(View v) { Toast.makeText(this, R.string.todo_settings, Toast.LENGTH_SHORT).show(); }
 }

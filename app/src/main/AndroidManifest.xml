@@ -38,5 +38,11 @@
             android:windowSoftInputMode="adjustResize"
             android:theme="@style/Theme.AppCompat.DayNight.NoActionBar" />
 
+        <activity
+            android:name=".HistoryActivity"
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize"
+            android:theme="@style/Theme.AppCompat.DayNight.NoActionBar"/>
+
     </application>
 </manifest>
